@@ -20,47 +20,68 @@ const syncServiceRates = require('./jobs/rateSyncJob');
 
 // Connect to database
 connectDB().then(async () => {
-    // Seed admin
     await seedAdmin();
-    // Start initial rate sync
     syncServiceRates();
 });
 
 const app = express();
 const server = http.createServer(app);
+
+/* =========================
+   ✅ PROPER CORS CONFIG
+========================= */
+
+const allowedOrigins = [
+    "https://cheapestsmmpanel.vercel.app",
+    "http://localhost:3000",
+    "http://localhost:3001"
+];
+
+app.use(helmet());
+
+app.use(cors({
+    origin: function (origin, callback) {
+        if (!origin) return callback(null, true);
+
+        if (allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        } else {
+            return callback(new Error("Not allowed by CORS"));
+        }
+    },
+    credentials: true,
+}));
+
+app.options("*", cors({
+    origin: allowedOrigins,
+    credentials: true
+}));
+
+/* ========================= */
+
 const io = socketio(server, {
     cors: {
-        origin: [config.frontendUrl, 'http://localhost:3000', 'http://localhost:3001'],
-        methods: ['GET', 'POST']
+        origin: allowedOrigins,
+        methods: ['GET', 'POST'],
+        credentials: true
     }
 });
 
-// 1. Logging
+// Logging
 if (config.env === 'development') {
     app.use(morgan('dev'));
 }
 
-// 2. Security Headers & CORS (Early for preflight)
-app.use(helmet());
-app.use(cors({
-    origin: [config.frontendUrl, 'http://localhost:3000', 'http://localhost:3001'],
-    credentials: true
-}));
-
-// 3. Body Parsing
+// Body parsing
 app.use(express.json());
 app.use(cookieParser());
 
-// 4. Data Sanitization (Immediately after body parsing)
+// Security middlewares
 app.use(mongoSanitize);
-
-// 5. Parameter Pollution Prevention
-app.use(hpp());
-
-// 6. Rate Limiting (After basic sanitization)
+app.use(hpp);
 app.use(apiLimiter);
 
-// Health check endpoint
+// Health check
 app.get('/health', (req, res) => {
     res.status(200).json({
         success: true,
@@ -71,21 +92,13 @@ app.get('/health', (req, res) => {
     });
 });
 
-// Route files
-const auth = require('./routes/auth');
-const providers = require('./routes/providers');
-const services = require('./routes/services');
-const orders = require('./routes/orders');
-const payments = require('./routes/payments');
-const blogs = require('./routes/blogs');
-
-// Mount routers
-app.use('/api/v1/auth', auth);
-app.use('/api/v1/providers', providers);
-app.use('/api/v1/services', services);
-app.use('/api/v1/orders', orders);
-app.use('/api/v1/payments', payments);
-app.use('/api/v1/blogs', blogs);
+// Routes
+app.use('/api/v1/auth', require('./routes/auth'));
+app.use('/api/v1/providers', require('./routes/providers'));
+app.use('/api/v1/services', require('./routes/services'));
+app.use('/api/v1/orders', require('./routes/orders'));
+app.use('/api/v1/payments', require('./routes/payments'));
+app.use('/api/v1/blogs', require('./routes/blogs'));
 app.use('/api/v1/analytics', require('./routes/analytics'));
 app.use('/api/v1/seo', require('./routes/seo'));
 app.use('/api/v1/users', require('./routes/users'));
@@ -96,53 +109,20 @@ app.get('/', (req, res) => {
     res.send('SMM Panel API is running...');
 });
 
-// Error handling middleware
+// Error handler
 app.use(errorHandler);
-
-// Attach IO to request
-app.use((req, res, next) => {
-    req.io = io;
-    next();
-});
 
 const PORT = config.port || 5000;
 
-server.listen(
-    PORT,
-    () => logger.info(`Server running in ${config.env} mode on port ${PORT}`)
+server.listen(PORT, () =>
+    logger.info(`Server running in ${config.env} mode on port ${PORT}`)
 );
 
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (err, promise) => {
-    logger.error(`Unhandled Rejection at: ${promise}, reason: ${err}`);
-    // Close server & exit process
-    // server.close(() => process.exit(1));
+// Process handlers
+process.on('unhandledRejection', (err) => {
+    logger.error(`Unhandled Rejection: ${err.message}`);
 });
 
-// Graceful shutdown
-const exitHandler = () => {
-    if (server) {
-        server.close(() => {
-            logger.info('Server closed');
-            process.exit(1);
-        });
-    } else {
-        process.exit(1);
-    }
-};
-
-const unexpectedErrorHandler = (error) => {
-    logger.error(error);
-    exitHandler();
-};
-
-process.on('uncaughtException', unexpectedErrorHandler);
-process.on('unhandledRejection', unexpectedErrorHandler);
-
-process.on('SIGTERM', () => {
-    logger.info('SIGTERM received');
-    if (server) {
-        server.close();
-    }
+process.on('uncaughtException', (err) => {
+    logger.error(`Uncaught Exception: ${err.message}`);
 });
-
