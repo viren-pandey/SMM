@@ -28,32 +28,15 @@ const app = express();
 const server = http.createServer(app);
 
 /* =========================
-   ✅ PROPER CORS CONFIG
+   ✅ PRODUCTION CORS CONFIG
 ========================= */
 
-const allowedOrigins = [
-    "https://cheapestsmmpanel.vercel.app",
-    "http://localhost:3000",
-    "http://localhost:3001"
-];
+const FRONTEND_URL = "https://cheapestsmmpanel.vercel.app";
 
 app.use(helmet());
 
 app.use(cors({
-    origin: function (origin, callback) {
-        if (!origin) return callback(null, true);
-
-        if (allowedOrigins.includes(origin)) {
-            return callback(null, true);
-        } else {
-            return callback(new Error("Not allowed by CORS"));
-        }
-    },
-    credentials: true,
-}));
-
-app.options("*", cors({
-    origin: allowedOrigins,
+    origin: FRONTEND_URL,
     credentials: true
 }));
 
@@ -61,13 +44,13 @@ app.options("*", cors({
 
 const io = socketio(server, {
     cors: {
-        origin: allowedOrigins,
+        origin: FRONTEND_URL,
         methods: ['GET', 'POST'],
         credentials: true
     }
 });
 
-// Logging
+// Logging (dev only)
 if (config.env === 'development') {
     app.use(morgan('dev'));
 }
@@ -118,7 +101,7 @@ server.listen(PORT, () =>
     logger.info(`Server running in ${config.env} mode on port ${PORT}`)
 );
 
-// Process handlers
+// Global error handling
 process.on('unhandledRejection', (err) => {
     logger.error(`Unhandled Rejection: ${err.message}`);
 });
