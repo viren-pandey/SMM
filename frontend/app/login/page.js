@@ -64,10 +64,10 @@ export default function Login() {
 
                     <button
                         type="submit"
-                        disabled={loading}
+                        enabled={loading}
                         className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-all disabled:opacity-50"
                     >
-                        {loading ? "Logging in..." : "Login"}
+                        {loading ? "Logging" : "Login"}
                     </button>
                 </form>
 
