@@ -1,0 +1,4 @@
+[dotenv@17.3.1] injecting env (25) from .env -- tip: ⚙️  override existing env vars with { override: true }
+info: Order Queue initialized
+info: Order Worker initialized
+info: Server closed
